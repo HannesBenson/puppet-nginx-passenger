@@ -24,15 +24,20 @@
 #
 # Sample Usage:  include nginx_passenger
 class nginx_passenger (
-  $ruby_version = 'ruby-2.0.0-p247',
-  $passenger_version = '4.0.23',
-  $logdir = '/var/log/nginx',
-  $installdir = '/opt/nginx',
-  $www    = '/var/www',
-  $nginx_source_dir = '',
-  $nginx_extra_configure_flags = '',
-  $app_environment = 'production',
-  $system_gems = []
+  $ruby_version                 = 'ruby-2.0.0-p247',
+  $ruby_gemset                  = '',
+  $passenger_version            = '4.0.23',
+  $logdir                       = '/var/log/nginx',
+  $installdir                   = '/opt/nginx',
+  $www                          = '/var/www',
+  $nginx_source_dir             = '',
+  $nginx_extra_configure_flags  = '',
+  $app_environment              = 'production',
+  $install_ruby                 = false,
+  $install_gems                 = false,
+  $user                         = 'www-data',
+  $group                        = 'www-data',
+  $system_gems                  = []
 ) inherits nginx_passenger::params {
 
     $base_options = "--auto --prefix=${installdir}"
@@ -58,42 +63,46 @@ class nginx_passenger (
 
     package { $passenger_deps: ensure => present }
 
-    rvm_system_ruby {
-      $ruby_version:
-        ensure      => 'present',
-        default_use => true;
+    if ($install_ruby) { 
+      rvm_system_ruby {
+        $ruby_version:
+          ensure      => 'present',
+          default_use => true;
+      }
     }
 
-    rvm_gem {
-      "${ruby_version}/passenger":
-        ensure => $passenger_version,
-  		require => Rvm_system_ruby["${ruby_version}"],
-  		ruby_version => $ruby_version;
-    }
-
-    rvm_gem {
-      "${ruby_version}/bundler":
+    if ($install_gems) {
+      rvm_gem {
+        "${ruby_version}/passenger":
+          ensure => $passenger_version,
         require => Rvm_system_ruby["${ruby_version}"],
         ruby_version => $ruby_version;
-    }
+      }
 
-    rvm_gem { $system_gems:
-        require => Rvm_system_ruby["${ruby_version}"],
-        ruby_version => $ruby_version;
+      rvm_gem {
+        "${ruby_version}/bundler":
+          require => Rvm_system_ruby["${ruby_version}"],
+          ruby_version => $ruby_version;
+      }
+
+      rvm_gem { $system_gems:
+          require => Rvm_system_ruby["${ruby_version}"],
+          ruby_version => $ruby_version;
+      }
     }
 
     exec { 'create container':
-      command => "/bin/mkdir ${www} && /bin/chown www-data:www-data ${www} && /bin/chmod g+rws ${www}",
+      command => "/bin/mkdir ${www} && /bin/chown ${user}:${group} ${www} && /bin/chmod g+rws ${www}",
       unless  => "/usr/bin/test -d ${www}",
       before  => Exec['nginx-install']
     }
 
     exec { 'nginx-install':
-      command => "/bin/bash -l -i -c \"/usr/local/rvm/gems/${ruby_version}/bin/passenger-install-nginx-module ${options}\"",
+      command      => "/usr/local/rvm/wrappers/ruby-2.1.2/passenger-install-nginx-module ${options}",
       group   => 'root',
-      unless  => "/usr/bin/test -d ${installdir}",
+      #unless  => "/usr/bin/test -d ${installdir}",
       require => [ Package[$passenger_deps], Rvm_system_ruby[$ruby_version], Rvm_gem["${ruby_version}/passenger"]],
-  	  environment => "HOME=/home/vagrant/",
+  	  environment => "HOME=/home/rails/",
     }
 
     file { 'nginx-config':

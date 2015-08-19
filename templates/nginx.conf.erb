@@ -1,5 +1,5 @@
 
-user  www-data www-data;
+user  <%= @user %> <%= @group %>;
 worker_processes  1;
 pid /var/run/nginx.pid;
 
